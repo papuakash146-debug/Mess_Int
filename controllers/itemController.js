@@ -3,14 +3,47 @@ const Usage = require('../models/usage');
 
 exports.addItem = async (req, res) => {
   try {
-    const { name, totalQuantity } = req.body;
-    const item = new Item({ name, totalQuantity });
+    let { name, totalQuantity, unit } = req.body;
+    
+    if (!unit) unit = 'g'; // fallback
+
+    // Convert to base unit
+    let baseQuantity = totalQuantity;
+    if (unit === 'kg') baseQuantity = totalQuantity * 1000;
+    else if (unit === 'L') baseQuantity = totalQuantity * 1000;
+    // add more conversions if you add more units (e.g. dozen → ×12)
+
+    const item = new Item({ 
+      name, 
+      totalQuantity: baseQuantity, 
+      unit: unit   // save the display unit
+    });
+    
     await item.save();
     res.status(201).json(item);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 };
+
+// Helper function
+function formatQuantity(quantity, unit) {
+  let displayQty = quantity;
+  let displayUnit = unit;
+
+  if (unit === 'g' && quantity >= 1000) {
+    displayQty = (quantity / 1000).toFixed(2);
+    displayUnit = 'kg';
+  } else if (unit === 'ml' && quantity >= 1000) {
+    displayQty = (quantity / 1000).toFixed(2);
+    displayUnit = 'L';
+  }
+  // You can add reverse logic for other units if needed
+
+  return `${displayQty} ${displayUnit}`;
+}
+
+
 
 exports.getStockSummary = async (req, res) => {
   try {
@@ -27,8 +60,14 @@ exports.getStockSummary = async (req, res) => {
       ]);
       const todayUsed = todayUsage.length ? todayUsage[0].totalUsed : 0;
       const remaining = item.totalQuantity - todayUsed;
-      return { name: item.name, totalQuantity: item.totalQuantity, todayUsed, remaining };
-    }));
+      return {
+    name: item.name,
+    totalQuantity: formatQuantity(item.totalQuantity, item.unit),
+    todayUsed: todayUsed.toFixed(2),  // todayUsed is raw number (in base unit) — you may want to format too
+    remaining: remaining.toFixed(2),
+    unit: item.unit  // or use formatted version
+  };
+}));
 
     res.json(summaries);
   } catch (err) {
