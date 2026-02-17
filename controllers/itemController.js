@@ -70,25 +70,19 @@ exports.getStockSummary = async (req, res) => {
     const summaries = await Promise.all(
       items.map(async (item) => {
         const todayUsage = await Usage.aggregate([
-          {
-            $match: {
-              item: item._id,
-              date: { $gte: today, $lt: tomorrow },
-            },
-          },
-          { $group: { _id: null, totalUsed: { $sum: '$usedQuantity' } } },
+          { $match: { item: item._id, date: { $gte: today, $lt: tomorrow } } },
+          { $group: { _id: null, totalUsed: { $sum: '$usedQuantity' } } }
         ]);
 
         const todayUsedBase = todayUsage.length ? todayUsage[0].totalUsed : 0;
-        const remainingBase = item.totalQuantity - todayUsedBase;
+        const remainingBase = Math.max(0, item.totalQuantity - todayUsedBase); // prevent negative
 
         return {
           name: item.name,
           totalQuantity: formatQuantity(item.totalQuantity, item.unit),
           todayUsed: formatQuantity(todayUsedBase, item.unit),
           remaining: formatQuantity(remainingBase, item.unit),
-          unit: item.unit, // useful for frontend if you want to re-format
-          baseTotal: item.totalQuantity, // optional - for debugging
+          // NO raw numbers anymore – everything is string like "300 kg"
         };
       })
     );
@@ -96,7 +90,7 @@ exports.getStockSummary = async (req, res) => {
     res.json(summaries);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch stock summary' });
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
